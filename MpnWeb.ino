@@ -75,7 +75,7 @@ uint32_t SdTime = 0;
 
 
 // size of buffer used to capture HTTP requests
-#define REQ_BUF_SZ   20
+#define REQ_BUF_SZ   126  // 21 June, V0.15,  V0.1: 20  
 #define F_BUF_SZ    1968 // 16384 +0.5s  4096,8192 +0.1~.2s  overhead canceled
 //#define WZ_BUF_SZ   2048 // for File, W5100s buffer by Easygn       
                           
@@ -102,13 +102,14 @@ char HTTP_req[REQ_BUF_SZ] = {0}; // buffered HTTP request stored as null termina
 char req_index = 0;              // index into HTTP_req buffer
 
 
-char *HTTP_pt[] = { "HTTP/1.1 200 OK", "Content-Type: text/html", "Connnection: close" };
+char *HTTP_pt[] = { "HTTP/1.1 200 OK", "Content-Type: text/", "Connnection: close" };
+char *Cn_Typ[] = { "html", "javascript" }; // 3 ~ 7 = ExtDoc[], 8 = 1
 char *GET_pt = "GET /";
 
-char *extDoc[] = { "html", "htm", "json", "md", "txt" };
+char *extDoc[] = { "html", "htm", "json", "md", "txt", "css", "csv", "xml", "js" };
 char *extPic[] = { "gif", "jpeg", "jpg", "png", "webp" };
 
-#define extDocSZ  5
+#define extDocSZ  9
 #define extPicSZ  5
 
 #define EXTENSION_STANDARD_SIZE 5
@@ -197,14 +198,14 @@ void loop()
                     if (StrContains(HTTP_req, "GET / ")
                                  || StrContains(HTTP_req, "GET /index.htm")) {
                         client.println(HTTP_pt[0]);
-                        client.println(HTTP_pt[1]);
+                        client.print(HTTP_pt[1]);  client.println(Cn_Typ[0]);
                         client.println(HTTP_pt[2]);
                         client.println();
                         webFile = SD.open("index.htm");        // open web page file
                     }                    
                     else if (StrContains(HTTP_req, GET_pt)) {  // 2pass F(Single 3step)_B(Multi) compare 7 May 2F by Egn
                       char extBegin = StrContains(HTTP_req, ".");
-                      char extEnd = extBegin + StrContains(&HTTP_req[extBegin], " ");
+                      char extEnd = extBegin + StrContains(&HTTP_req[extBegin], " HTTP/"); // ' HTTP/1.1' Tail Meta
                            extBegin = StrContains_R(HTTP_req, ".", extEnd); // reCheck last searched .fileExtension
                       int brLoop;
                       if (extEnd-EXTENSION_STANDARD_SIZE <= extBegin && extBegin < extEnd) {    // must .fileExt standard size (1~Four)
@@ -213,11 +214,12 @@ void loop()
                           while (brLoop < extDocSZ) {
                             if (StrContains(&HTTP_req[extBegin], extDoc[brLoop])) {
                               client.println(HTTP_pt[0]);
-                              client.println(HTTP_pt[1]);
+                              client.print(HTTP_pt[1]);  client.println(brLoop == 8 ? Cn_Typ[1] : ( brLoop >=3 ? extDoc[brLoop] : Cn_Typ[0] )  );
                               client.println(HTTP_pt[2]);
                               client.println();
                               ReqToFilename(HTTP_req, strFilename, extDoc[brLoop], extBegin);
                               webFile = SD.open(strFilename);        // open web page file
+                            Serial.printf("Org Req : %s \n", HTTP_req);
                               Serial.printf("Document Addr .begin : %d, brLoop : %d \n", (int)extBegin, brLoop); // %s \n", HTTP_req); // strFilename);
                               break;
                             }
@@ -228,6 +230,7 @@ void loop()
                             if (StrContains(&HTTP_req[extBegin], extPic[brLoop])) { 
                               ReqToFilename(HTTP_req, strFilename, extPic[brLoop], extBegin);
                               webFile = SD.open(strFilename);        // open web page file
+                            Serial.printf("Org Req : %s \n", HTTP_req);
                               Serial.printf("Picture Addr :  %s \n", strFilename);
                               if (webFile) {
                                 client.println(HTTP_pt[0]);
@@ -286,7 +289,7 @@ void loop()
                         }
                         rp2040.fifo.push(T_CLOSE);
                         webFile.close();
-                      Serial.printf("Eth : %d ms, SD : %d ms, Total : %d ms \n", EthTime, SdTime, millis()-TprevTime);
+                      Serial.printf("Eth : %d ms, SD : %d ms, Total : %d ms \n\n\n", EthTime, SdTime, millis()-TprevTime);
                       EthTime = 0;  SdTime = 0;
                     }
                     // reset buffer index and all buffer elements to 0
@@ -361,7 +364,7 @@ char StrContains(char *str, char *sfind)
         if ( str[index] == sfind[found]  ) { //  || (CaseEx && str[index] == sfind[found]-32) ) {
             found++;                        // Case Expression (maybe system's auto 8 May 2F)
             if (strlen(sfind) == found) {
-                 return index;   // old: 1; Extension accurate Begin point, 7 May 2F by Egn
+                 return index+1 +1-found;   // StrCheck and back to BeginPoint, 21 June _ Extension accurate BeginPoint, 7 May 2F by Egn _ old: 1
             }
         }
         else {
